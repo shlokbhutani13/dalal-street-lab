@@ -1,0 +1,12 @@
+# What Dalal Street Lab watches: India and commodities, through US-listed securities.
+# Edit this file to change it; no code changes needed. Max 30 symbols (free live-data limit).
+
+[india]
+# ETFs that hold Indian stocks. INDY tracks the Nifty 50 index.
+etfs = ["INDY", "INDA"]
+# Indian companies whose shares also trade in the US (ADRs).
+adrs = ["INFY", "HDB", "IBN", "WIT", "RDY", "MMYT"]
+
+[commodities]
+# ETFs that track gold, silver and crude oil prices.
+etfs = ["GLD", "SLV", "USO"]

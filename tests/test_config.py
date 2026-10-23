@@ -37,3 +37,9 @@ def test_bad_port_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("POSTGRES_PORT", "not-a-number")
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_sqlalchemy_url_uses_psycopg_driver(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("POSTGRES_PASSWORD", "s3cret")
+    settings = Settings()
+    assert settings.sqlalchemy_url.startswith("postgresql+psycopg://")
