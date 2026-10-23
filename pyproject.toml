@@ -20,6 +20,7 @@ dependencies = [
 [project.scripts]
 dalal-check = "dalal_street_lab.check:main"
 dalal-instruments = "dalal_street_lab.instruments:main"
+dalal-backfill = "dalal_street_lab.history:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]

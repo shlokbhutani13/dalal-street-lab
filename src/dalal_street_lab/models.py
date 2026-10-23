@@ -73,7 +73,8 @@ class Candle(Base):
     close: Mapped[Decimal] = mapped_column(PRICE)
     volume: Mapped[int] = mapped_column(BigInteger, default=0)
     open_interest: Mapped[int | None] = mapped_column(BigInteger)  # futures only
-
+    trade_count: Mapped[int | None] = mapped_column(BigInteger)  # how many trades made this bar
+    vwap: Mapped[Decimal | None] = mapped_column(PRICE)  # volume-weighted average price
     # The database itself refuses impossible candles, before any Python code is involved.
     __table_args__ = (
         CheckConstraint("low > 0", name="positive_prices"),
