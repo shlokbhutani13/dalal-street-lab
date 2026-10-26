@@ -10,7 +10,9 @@ from decimal import Decimal
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Date,
     DateTime,
+    Float,
     ForeignKey,
     MetaData,
     Numeric,
@@ -144,3 +146,34 @@ class ArticleSymbol(Base):
     instrument_id: Mapped[int] = mapped_column(
         ForeignKey("instruments.id"), primary_key=True, index=True
     )
+
+
+class FeatureRow(Base):
+    """One row of model inputs: everything known about a symbol at the close of one day,
+    plus the answer the model must learn to guess (tomorrow's move).
+
+    Plain floats, not exact decimals: these are measurements for a model, not money.
+    """
+
+    __tablename__ = "features"
+
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    feature_version: Mapped[str] = mapped_column(String(16))
+
+    ret_1d: Mapped[float] = mapped_column(Float)
+    ret_5d: Mapped[float] = mapped_column(Float)
+    ret_20d: Mapped[float] = mapped_column(Float)
+    volatility_20d: Mapped[float] = mapped_column(Float)
+    volume_ratio_20d: Mapped[float] = mapped_column(Float)
+    rsi_14: Mapped[float] = mapped_column(Float)
+    sma_gap_20d: Mapped[float] = mapped_column(Float)
+    range_1d: Mapped[float] = mapped_column(Float)
+    market_ret_1d: Mapped[float] = mapped_column(Float)
+    news_count_1d: Mapped[float] = mapped_column(Float)
+    news_mood_1d: Mapped[float] = mapped_column(Float)
+    news_mood_5d: Mapped[float] = mapped_column(Float)
+
+    # The answers. Empty for the newest day: tomorrow hasn't happened yet.
+    target_ret_1d: Mapped[float | None] = mapped_column(Float)
+    target_up: Mapped[bool | None]

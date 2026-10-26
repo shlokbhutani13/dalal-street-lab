@@ -32,6 +32,7 @@ dalal-stream = "dalal_street_lab.stream:main"
 dalal-watch = "dalal_street_lab.watch:main"
 dalal-news = "dalal_street_lab.news:main"
 dalal-sentiment = "dalal_street_lab.sentiment:main"
+dalal-features = "dalal_street_lab.features:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
