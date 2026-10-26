@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     alpaca_trading_url: str = "https://paper-api.alpaca.markets"  # paper = fake money
     alpaca_data_url: str = "https://data.alpaca.markets"
     alpaca_feed: str = "iex"  # free accounts get real-time data from the IEX exchange
+    alpaca_stream_url: str = "wss://stream.data.alpaca.markets/v2/iex"
     # ---------- App ----------
     log_level: str = "INFO"
     log_format: str = "console"  # "console" on your laptop, "json" on servers
