@@ -106,6 +106,23 @@ def test_parse_keeps_exact_prices_and_utc_time() -> None:
     assert row["vwap"] == Decimal("52.07")
 
 
+def test_placeholder_bars_with_no_trades_are_skipped() -> None:
+    # What Alpaca sent for INDY on 2022-07-12: the last price repeated, nothing traded.
+    placeholder = {
+        "t": "2022-07-12T04:00:00Z",
+        "o": 41.55,
+        "h": 41.55,
+        "l": 41.55,
+        "c": 41.55,
+        "v": 0,
+        "n": 0,
+        "vw": 0,
+    }
+    rows = parse_bars([placeholder, bar(0)], instrument_id=1, interval="1day")
+    assert len(rows) == 1  # only the real one
+    assert rows[0]["trade_count"] == 14
+
+
 def test_save_twice_does_not_duplicate_and_refreshes_values(session: Session) -> None:
     instrument = make_instrument(session)
     save_candles(session, parse_bars([bar(0), bar(1)], instrument.id, "1minute"))

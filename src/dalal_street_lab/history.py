@@ -56,7 +56,12 @@ def fetch_bars(
 def parse_bars(
     bars: list[dict[str, Any]], instrument_id: int, interval: str
 ) -> list[dict[str, Any]]:
-    """Alpaca's short names: t=time o=open h=high l=low c=close v=volume n=trades vw=avg price."""
+    """Alpaca's short names: t=time o=open h=high l=low c=close v=volume n=trades vw=avg price.
+
+    Bars with zero trades are skipped. On days when nobody traded a symbol on IEX, Alpaca
+    still sends a "placeholder" bar: the last price repeated, volume 0, vwap 0. No trade
+    happened, so it isn't a real price, and saving it would hide the gap.
+    """
     return [
         {
             "instrument_id": instrument_id,
@@ -71,6 +76,7 @@ def parse_bars(
             "vwap": Decimal(str(bar["vw"])),
         }
         for bar in bars
+        if bar["n"] > 0 and bar["v"] > 0
     ]
 
 

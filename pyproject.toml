@@ -9,6 +9,9 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.20.1",
+    "pandas>=3.1.0",
+    "pandas-market-calendars>=5.5.0",
+    "pandera>=0.34.1",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.1",
     "redis>=8.1.0",
@@ -21,6 +24,7 @@ dependencies = [
 dalal-check = "dalal_street_lab.check:main"
 dalal-instruments = "dalal_street_lab.instruments:main"
 dalal-backfill = "dalal_street_lab.history:main"
+dalal-quality = "dalal_street_lab.quality:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
@@ -29,6 +33,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "mypy>=2.4.0",
+    "pandas-stubs>=3.0.5.260914",
     "pre-commit>=4.7.0",
     "pytest>=9.1.1",
     "responses>=0.26.3",
@@ -47,7 +52,17 @@ select = ["E", "F", "I", "B", "UP", "N", "SIM"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-plugins = ["pydantic.mypy"]
+plugins = ["pydantic.mypy", "pandera.mypy"]
+
+[[tool.mypy.overrides]]
+# This library ships without type information, so mypy can't check calls into it.
+module = ["pandas_market_calendars"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "error",  # any warning fails the tests, so problems can't hide in the output
+    # ...except this one, from inside pandas_market_calendars (their code, harmless today):
+    "ignore:Series.dt.weekday is deprecated",
+]
