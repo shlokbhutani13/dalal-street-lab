@@ -15,12 +15,14 @@ from sqlalchemy import (
     MetaData,
     Numeric,
     String,
+    Text,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Money is stored as an exact decimal, never a float: 0.1 + 0.2 must equal 0.3.
 PRICE = Numeric(14, 4)
+SCORE = Numeric(5, 4)
 
 # Predictable names for indexes and constraints, so migrations can find them later.
 NAMING_CONVENTION = {
@@ -99,3 +101,46 @@ class Tick(Base):
     )
 
     __table_args__ = (CheckConstraint("price > 0", name="positive_price"),)
+
+
+class Article(Base):
+    """One news article from Alpaca (written by Benzinga), plus FinBERT's mood for it.
+
+    The sentiment columns start empty: downloading and scoring are separate jobs, so a
+    slow AI model never holds up the download, and either can be re-run on its own.
+    """
+
+    __tablename__ = "news"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)  # Alpaca's
+    headline: Mapped[str] = mapped_column(Text)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    source: Mapped[str] = mapped_column(String(32))  # "benzinga"
+    author: Mapped[str] = mapped_column(String(256), default="")
+    url: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    # Filled in by FinBERT. Three probabilities that add up to 1, and one simple score.
+    sentiment_model: Mapped[str | None] = mapped_column(String(64))  # which AI scored it
+    positive: Mapped[Decimal | None] = mapped_column(SCORE)
+    negative: Mapped[Decimal | None] = mapped_column(SCORE)
+    neutral: Mapped[Decimal | None] = mapped_column(SCORE)
+    sentiment: Mapped[Decimal | None] = mapped_column(SCORE)  # positive - negative: -1 to +1
+
+    __table_args__ = (CheckConstraint("sentiment BETWEEN -1 AND 1", name="sentiment_in_range"),)
+
+
+class ArticleSymbol(Base):
+    """Which of our instruments an article is about. One article can be about several
+    (a story about Indian IT can mention INFY and WIT), so this is its own table."""
+
+    __tablename__ = "news_symbols"
+
+    news_id: Mapped[int] = mapped_column(
+        ForeignKey("news.id", ondelete="CASCADE"), primary_key=True
+    )
+    # Indexed, so "all news about INFY" is fast, not a scan of every row.
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instruments.id"), primary_key=True, index=True
+    )

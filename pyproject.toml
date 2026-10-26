@@ -18,6 +18,8 @@ dependencies = [
     "requests>=2.34.2",
     "sqlalchemy>=2.1.6",
     "structlog>=26.1.0",
+    "torch>=2.14.1",
+    "transformers>=5.21.0",
     "websockets>=17.3",
 ]
 
@@ -28,6 +30,8 @@ dalal-backfill = "dalal_street_lab.history:main"
 dalal-quality = "dalal_street_lab.quality:main"
 dalal-stream = "dalal_street_lab.stream:main"
 dalal-watch = "dalal_street_lab.watch:main"
+dalal-news = "dalal_street_lab.news:main"
+dalal-sentiment = "dalal_street_lab.sentiment:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
