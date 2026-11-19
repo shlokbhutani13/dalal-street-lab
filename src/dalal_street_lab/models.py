@@ -177,3 +177,23 @@ class FeatureRow(Base):
     # The answers. Empty for the newest day: tomorrow hasn't happened yet.
     target_ret_1d: Mapped[float | None] = mapped_column(Float)
     target_up: Mapped[bool | None]
+
+
+class Prediction(Base):
+    """One out-of-sample guess: "how likely is this symbol to go up the day after `day`?"
+
+    Every row says which model made it and which MLflow run it came from, so any number
+    on a chart can be traced back to the exact experiment that produced it.
+    """
+
+    __tablename__ = "predictions"
+
+    model_name: Mapped[str] = mapped_column(String(32), primary_key=True)
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    prob_up: Mapped[float] = mapped_column(Float)
+    feature_version: Mapped[str] = mapped_column(String(16))
+    mlflow_run_id: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (CheckConstraint("prob_up BETWEEN 0 AND 1", name="prob_up_in_range"),)
