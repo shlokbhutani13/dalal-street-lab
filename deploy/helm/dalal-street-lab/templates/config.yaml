@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dalal.name" . }}-config
+  labels:
+    {{- include "dalal.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  DALAL_KILL_SWITCH: {{ ternary "1" "0" .Values.killSwitch | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "dalal.name" . }}-mlflow
+  labels:
+    {{- include "dalal.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep # uninstalling the chart doesn't delete experiment history
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.mlflow.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.mlflow.storage }}

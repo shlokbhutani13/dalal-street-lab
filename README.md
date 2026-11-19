@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/shlokbhutani13/dalal-street-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/shlokbhutani13/dalal-street-lab/actions/workflows/ci.yml)
 
-A live AI paper-trading system for the Indian market, built the way a real trading data team would build it. It pulls prices and news, checks the data, scores the news with FinBERT, builds features without peeking at the future, and (next) trains models and paper-trades them.
+A live AI paper-trading system for the Indian market, built the way a real trading data team would build it. It pulls prices and news, checks the data, scores the news with FinBERT, builds features without peeking at the future, tests models walk-forward, backtests them with trading costs and paper-trades the result, with a live dashboard, monitoring and drift checks on top.
 
-> **Work in progress.** Steps 1–8 are done. The model, backtest and paper-trading bot are next. Paper trading only, with fake money. Nothing here is investment advice.
+> Paper trading only, with fake money. Nothing here is investment advice.
 
 ## Why "India through the US"?
 
@@ -28,6 +28,15 @@ The list lives in [`watchlist.toml`](watchlist.toml), so changing it needs no co
 | 6 | Live prices over a websocket into Redis and the database, with auto-reconnect and clean shutdown | `dalal-stream`, `dalal-watch` |
 | 7 | Downloads news and scores each article's mood with FinBERT (runs on CPU, CUDA or Apple MPS) | `dalal-news`, `dalal-sentiment` |
 | 8 | Builds 12 daily features (returns, volatility, RSI, volume, market move, news mood) and next-day targets | `dalal-features` |
+| 9 | Walk-forward testing (6-month folds, 1-day gap) of logistic regression and a small PyTorch net against two baselines, tracked in MLflow | `dalal-train` |
+| 10 | Backtest of the predictions with spread and slippage, compared with buy-and-hold | `dalal-backtest` |
+| 11 | Paper-trading bot: 10% per stock, 60% total, 2% daily loss stop, kill switch, no duplicate orders | `dalal-bot` |
+| 12 | FastAPI service and a live dashboard (candles, model odds, screener, news, trades over a websocket) | `dalal-api` |
+| 13 | Prometheus metrics and a Grafana dashboard (stream health, API speed, bot equity and P&L) | `docker compose up` |
+| 14 | Docker image (CPU-only PyTorch, non-root), built and published to GHCR by CI | `docker run` |
+| 15 | Kubernetes Helm chart: API, a single-copy stream, migrations on upgrade, nightly/bot/drift CronJobs | `helm install` |
+| 16 | Nightly Airflow pipeline. If the drift check fails, the bot sits that day out. | `airflow/dags` |
+| 17 | Drift checks: feature PSI and recent AUC vs the backtest | `dalal-drift` |
 
 ## Rules I stuck to
 
@@ -48,8 +57,24 @@ uv sync
 uv run alembic upgrade head
 uv run dalal-instruments && uv run dalal-backfill && uv run dalal-quality
 uv run dalal-news && uv run dalal-sentiment && uv run dalal-features
+uv run dalal-train && uv run dalal-backtest
+uv run dalal-bot              # dry run: prints the orders it would place
+uv run dalal-api              # dashboard at http://localhost:8000
+uv run dalal-drift
 uv run dalal-stream           # live prices (market hours)
 ```
+
+The bot only sends orders with `--submit`, and only ever to Alpaca's paper URL. `DALAL_KILL_SWITCH=1` or a file named `KILL_SWITCH` stops it.
+
+## Run it on Kubernetes
+
+```bash
+kubectl create secret generic dalal-secrets \
+  --from-literal=POSTGRES_PASSWORD=... --from-literal=ALPACA_API_KEY=... --from-literal=ALPACA_SECRET_KEY=...
+helm install dalal deploy/helm/dalal-street-lab --set config.POSTGRES_HOST=<your db>
+```
+
+TimescaleDB and Redis are not in the chart: point it at ones you already run. The bot CronJob is a dry run until you set `bot.submit=true`. If you'd rather use Airflow, set `nightly.enabled=false` and load `airflow/dags/dalal_nightly.py`.
 
 ## Tests
 
@@ -60,16 +85,7 @@ uv run ruff check . && uv run mypy src tests
 
 Tests run against a real throwaway database built from the actual migrations. The live stream is tested against a fake websocket server and fake Redis, and FinBERT is tested with a tiny local model, so no test needs the internet.
 
-## What's next
-
-9. Walk-forward model testing (logistic regression and a PyTorch net vs. simple baselines), tracked in MLflow
-10. Backtest with trading costs
-11. Paper-trading bot with risk limits (position caps, daily loss stop, kill switch)
-12. FastAPI service and live dashboard
-13. Prometheus and Grafana monitoring
-14. Docker images, then Kubernetes with Helm
-15. Nightly Airflow pipeline
-16. Watching for model drift
+CI also lints and renders the Helm chart, checks it against the Kubernetes schemas, and loads the Airflow DAG.
 
 ## License
 

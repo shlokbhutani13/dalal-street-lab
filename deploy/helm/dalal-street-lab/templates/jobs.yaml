@@ -1,0 +1,72 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "dalal.name" . }}-migrate
+  labels:
+    {{- include "dalal.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        {{- include "dalal.selector" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "dalal.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # The hook runs before the chart's ConfigMap exists, so settings are passed directly.
+          command: ["sh", "-c", "alembic upgrade head && dalal-instruments"]
+          env:
+            {{- range $key, $value := .Values.config }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+{{- end }}
+{{- $jobs := list }}
+{{- if .Values.nightly.enabled }}
+{{- $jobs = append $jobs (dict "name" "nightly" "schedule" .Values.nightly.schedule "resources" .Values.nightly.resources "command" "dalal-backfill && dalal-quality && dalal-news && dalal-sentiment && dalal-features && dalal-train && dalal-backtest") }}
+{{- end }}
+{{- if .Values.bot.enabled }}
+{{- $botCommand := printf "dalal-bot --sync && dalal-bot --model %s --threshold %v%s" .Values.bot.model .Values.bot.threshold (ternary " --submit" "" .Values.bot.submit) }}
+{{- $jobs = append $jobs (dict "name" "bot" "schedule" .Values.bot.schedule "resources" .Values.bot.resources "command" $botCommand) }}
+{{- end }}
+{{- if .Values.drift.enabled }}
+{{- $jobs = append $jobs (dict "name" "drift" "schedule" .Values.drift.schedule "resources" .Values.bot.resources "command" "dalal-drift") }}
+{{- end }}
+{{- range $job := $jobs }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "dalal.name" $ }}-{{ $job.name }}
+  labels:
+    {{- include "dalal.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $job.name }}
+spec:
+  schedule: {{ $job.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid # never run two copies of the same job at once
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 7200
+      template:
+        {{- include "dalal.jobPod" (list $ $job.command $job.resources) | nindent 8 }}
+{{- end }}

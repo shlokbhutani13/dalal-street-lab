@@ -1,0 +1,90 @@
+# Settings for the Dalal Street Lab Helm chart.
+#
+# The database (TimescaleDB) and Redis are NOT part of this chart. Point it at ones you
+# already run (a managed Postgres with the TimescaleDB extension, or separate charts).
+
+image:
+  repository: ghcr.io/shlokbhutani13/dalal-street-lab
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Secrets are never put in this file. Create them once with:
+#   kubectl create secret generic dalal-secrets \
+#     --from-literal=POSTGRES_PASSWORD=... \
+#     --from-literal=ALPACA_API_KEY=... \
+#     --from-literal=ALPACA_SECRET_KEY=...
+existingSecret: dalal-secrets
+
+# Plain (non-secret) settings. They end up in a ConfigMap.
+config:
+  POSTGRES_HOST: timescaledb
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: dalal
+  POSTGRES_USER: dalal
+  REDIS_URL: redis://redis:6379/0
+  LOG_FORMAT: json
+  LOG_LEVEL: INFO
+
+# Flip to true to stop the bot from placing any orders, without redeploying anything else.
+killSwitch: false
+
+api:
+  replicas: 2
+  port: 8000
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+# Live prices. Always exactly one copy: Alpaca's free plan allows one websocket at a time,
+# so the Deployment uses "Recreate" (old pod stops before the new one starts).
+stream:
+  enabled: true
+  metricsPort: 9101
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 256Mi }
+
+# Run "alembic upgrade head" before every install or upgrade.
+migrations:
+  enabled: true
+
+# MLflow keeps its runs in a small SQLite file on a volume shared by the jobs.
+mlflow:
+  storage: 1Gi
+  storageClassName: ""
+
+# Scheduled jobs (times are UTC; the US market closes at 20:00 or 21:00 UTC).
+# If you run the Airflow pipeline in airflow/ instead, set nightly.enabled to false.
+nightly:
+  enabled: true
+  schedule: "30 22 * * 1-5"
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { memory: 3Gi }
+
+bot:
+  enabled: true
+  schedule: "45 13 * * 1-5" # before the 13:30/14:30 UTC open, plans orders for the day
+  model: logistic
+  threshold: 0.5
+  # Dry run by default: the bot prints its plan but sends nothing. Set true to send
+  # orders to the Alpaca PAPER account (fake money).
+  submit: false
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+drift:
+  enabled: true
+  schedule: "0 23 * * 1-5"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile: { type: RuntimeDefault }
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities: { drop: [ALL] }

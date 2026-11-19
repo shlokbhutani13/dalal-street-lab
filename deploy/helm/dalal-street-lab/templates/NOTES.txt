@@ -1,0 +1,10 @@
+Dalal Street Lab is installed as "{{ .Release.Name }}".
+
+Open the dashboard:
+  kubectl port-forward svc/{{ include "dalal.name" . }}-api 8000:80
+  then visit http://localhost:8000
+
+Bot mode: {{ if .Values.killSwitch }}KILL SWITCH ON, no orders{{ else if .Values.bot.submit }}sends orders to the Alpaca PAPER account{{ else }}dry run (plans orders, sends nothing){{ end }}
+
+Run the nightly pipeline right now:
+  kubectl create job --from=cronjob/{{ include "dalal.name" . }}-nightly nightly-now

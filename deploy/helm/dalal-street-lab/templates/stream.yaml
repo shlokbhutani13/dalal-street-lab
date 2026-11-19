@@ -1,0 +1,49 @@
+{{- if .Values.stream.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dalal.name" . }}-stream
+  labels:
+    {{- include "dalal.labels" . | nindent 4 }}
+    app.kubernetes.io/component: stream
+spec:
+  replicas: 1 # never more: Alpaca's free plan allows one websocket connection
+  strategy:
+    type: Recreate # stop the old pod before starting a new one, so two never overlap
+  selector:
+    matchLabels:
+      {{- include "dalal.selector" . | nindent 6 }}
+      app.kubernetes.io/component: stream
+  template:
+    metadata:
+      labels:
+        {{- include "dalal.selector" . | nindent 8 }}
+        app.kubernetes.io/component: stream
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.stream.metricsPort | quote }}
+    spec:
+      terminationGracePeriodSeconds: 30 # time for the stream to flush and close cleanly
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: stream
+          image: {{ include "dalal.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["dalal-stream"]
+          {{- include "dalal.env" . | nindent 10 }}
+          env:
+            - name: DALAL_METRICS_PORT
+              value: {{ .Values.stream.metricsPort | quote }}
+          ports:
+            - { name: metrics, containerPort: {{ .Values.stream.metricsPort }} }
+          livenessProbe:
+            httpGet: { path: /metrics, port: metrics }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.stream.resources | nindent 12 }}
+{{- end }}
