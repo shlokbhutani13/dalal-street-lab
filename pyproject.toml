@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.20.1",
+    "fastapi>=0.120",
     "mlflow>=3.5",
     "pandas>=3.1.0",
     "pandas-market-calendars>=5.5.0",
@@ -22,6 +23,7 @@ dependencies = [
     "structlog>=26.1.0",
     "torch>=2.14.1",
     "transformers>=5.21.0",
+    "uvicorn[standard]>=0.38",
     "websockets>=17.3",
 ]
 
@@ -38,6 +40,7 @@ dalal-features = "dalal_street_lab.features:main"
 dalal-train = "dalal_street_lab.training:main"
 dalal-backtest = "dalal_street_lab.backtest:main"
 dalal-bot = "dalal_street_lab.bot:main"
+dalal-api = "dalal_street_lab.api:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
@@ -46,6 +49,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "fakeredis>=2.40.0",
+    "httpx>=0.28",
     "mypy>=2.4.0",
     "pandas-stubs>=3.0.5.260914",
     "pre-commit>=4.7.0",

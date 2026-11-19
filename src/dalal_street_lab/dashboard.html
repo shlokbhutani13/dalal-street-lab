@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dalal Street Lab</title>
+  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root { --bg:#0f1115; --panel:#171a21; --line:#262b36; --text:#e6e8ec; --muted:#8b93a1; --up:#22c55e; --down:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:14px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+    header { display:flex; justify-content:space-between; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line); }
+    header h1 { font-size:18px; margin:0; } header small { color:var(--muted); }
+    main { display:grid; grid-template-columns: 2fr 1fr; gap:16px; padding:16px 20px; }
+    section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+    h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px; }
+    #chart { height:380px; }
+    select { background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 8px; }
+    table { width:100%; border-collapse:collapse; } th, td { padding:6px 4px; text-align:right; border-bottom:1px solid var(--line); }
+    th { color:var(--muted); font-weight:500; cursor:pointer; } td:first-child, th:first-child { text-align:left; }
+    tbody tr { cursor:pointer; } tbody tr:hover { background:#1e2230; }
+    .up { color:var(--up); } .down { color:var(--down); }
+    #trades { height:260px; overflow:auto; font-family:ui-monospace, monospace; font-size:12px; }
+    #news a { color:var(--text); text-decoration:none; } #news li { margin-bottom:8px; }
+    .note { color:var(--muted); font-size:12px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>Dalal Street Lab</h1><small>India through US-listed ETFs and ADRs · paper trading only</small></div>
+    <label>Symbol <select id="symbol"></select></label>
+  </header>
+  <main>
+    <section>
+      <h2>Daily price and the model's chance of "up tomorrow"</h2>
+      <div id="chart"></div>
+      <p class="note">Candles: daily prices. Line (right axis): the logistic model's out-of-sample probability. Near 50% is normal.</p>
+    </section>
+    <section>
+      <h2>Live trades</h2>
+      <div id="trades"><span class="note">Waiting for trades (market hours only)…</span></div>
+    </section>
+    <section>
+      <h2>Screener <span class="note">(click a column to sort, a row to chart it)</span></h2>
+      <table>
+        <thead><tr>
+          <th data-sort="symbol">Symbol</th><th data-sort="ret_1d">1-day</th><th data-sort="ret_5d">5-day</th>
+          <th data-sort="rsi_14">RSI</th><th data-sort="news_mood_5d">News mood</th><th data-sort="prob_up">P(up)</th>
+        </tr></thead>
+        <tbody id="screener"></tbody>
+      </table>
+    </section>
+    <section>
+      <h2>Latest news</h2>
+      <ul id="news"></ul>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const pct = (x) => x == null ? "–" : `${(100 * x).toFixed(2)}%`;
+    const cls = (x) => x == null ? "" : (x >= 0 ? "up" : "down");
+    const text = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+    const chart = LightweightCharts.createChart($("chart"), {
+      layout: { background: { color: "#171a21" }, textColor: "#8b93a1" },
+      grid: { vertLines: { color: "#262b36" }, horzLines: { color: "#262b36" } },
+      rightPriceScale: { visible: true }, leftPriceScale: { visible: true },
+    });
+    const candles = chart.addCandlestickSeries({ priceScaleId: "left" });
+    const probs = chart.addLineSeries({ priceScaleId: "right", color: "#7c6bff", lineWidth: 2 });
+
+    async function json(url) { const r = await fetch(url); if (!r.ok) throw new Error(url); return r.json(); }
+
+    async function show(symbol) {
+      $("symbol").value = symbol;
+      const [prices, guesses, news] = await Promise.all([
+        json(`/api/prices/${symbol}`), json(`/api/predictions/${symbol}`), json(`/api/news/${symbol}?limit=8`),
+      ]);
+      candles.setData(prices);
+      probs.setData(guesses.map((g) => ({ time: g.day, value: g.prob_up })));
+      chart.timeScale().fitContent();
+      $("news").innerHTML = news.map((n) =>
+        `<li><a href="${text(n.url || "#")}" target="_blank" rel="noopener">${text(n.headline)}</a>
+         <span class="${cls(n.sentiment)}">${n.sentiment == null ? "" : n.sentiment.toFixed(2)}</span></li>`).join("")
+        || '<li class="note">No news for this symbol.</li>';
+    }
+
+    async function screener(sort = "prob_up") {
+      const data = await json(`/api/screener?sort=${sort}`);
+      $("screener").innerHTML = data.rows.map((r) => `
+        <tr data-symbol="${text(r.symbol)}">
+          <td>${text(r.symbol)}</td><td class="${cls(r.ret_1d)}">${pct(r.ret_1d)}</td>
+          <td class="${cls(r.ret_5d)}">${pct(r.ret_5d)}</td><td>${r.rsi_14.toFixed(0)}</td>
+          <td class="${cls(r.news_mood_5d)}">${r.news_mood_5d.toFixed(2)}</td>
+          <td>${r.prob_up == null ? "–" : pct(r.prob_up)}</td>
+        </tr>`).join("");
+    }
+
+    function live() {
+      const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/trades`);
+      let first = true;
+      ws.onmessage = (event) => {
+        const t = JSON.parse(event.data);
+        if (first) { $("trades").innerHTML = ""; first = false; }
+        const line = document.createElement("div");
+        line.textContent = `${t.time.slice(11, 19)}  ${t.symbol.padEnd(5)} $${Number(t.price).toFixed(2)}  x${t.size}`;
+        $("trades").prepend(line);
+        while ($("trades").childElementCount > 200) $("trades").lastChild.remove();
+      };
+      ws.onclose = () => setTimeout(live, 3000);
+    }
+
+    document.querySelectorAll("th[data-sort]").forEach((th) => th.onclick = () => screener(th.dataset.sort));
+    $("screener").onclick = (e) => { const row = e.target.closest("tr"); if (row) show(row.dataset.symbol); };
+    $("symbol").onchange = (e) => show(e.target.value);
+
+    (async () => {
+      const symbols = await json("/api/instruments");
+      $("symbol").innerHTML = symbols.map((s) => `<option>${text(s.symbol)}</option>`).join("");
+      await screener();
+      if (symbols.length) await show(symbols.find((s) => s.symbol === "INDY")?.symbol || symbols[0].symbol);
+      live();
+    })();
+  </script>
+</body>
+</html>
