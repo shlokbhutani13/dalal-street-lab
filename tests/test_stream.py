@@ -208,3 +208,14 @@ def test_live_rows_fit_the_real_tables(session: Session) -> None:
     save_candles(session, parse_bars([BAR], instrument.id, "1minute"))
     assert session.scalar(select(func.count()).select_from(Tick)) == 1
     assert session.scalar(select(func.count()).select_from(Candle)) == 1
+
+
+def test_trades_are_counted_for_prometheus() -> None:
+    from dalal_street_lab.metrics import STREAM_TRADES
+
+    before = STREAM_TRADES.labels(symbol="INFY")._value.get()
+    stream = LiveStream(settings(1), {"INFY": 7}, fakeredis.FakeAsyncRedis(), writer=Recorder())
+    asyncio.run(
+        stream.handle({"T": "t", "S": "INFY", "p": 19.9, "s": 5, "t": "2026-11-18T15:30:00Z"})
+    )
+    assert STREAM_TRADES.labels(symbol="INFY")._value.get() == before + 1

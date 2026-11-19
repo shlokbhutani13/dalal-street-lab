@@ -1,0 +1,12 @@
+# Prometheus visits each service's /metrics page every 15 seconds and stores the numbers.
+# host.docker.internal = your laptop, where `uv run dalal-api` and `dalal-stream` run.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: api
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+  - job_name: stream
+    static_configs:
+      - targets: ["host.docker.internal:9101"]

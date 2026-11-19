@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import redis
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -38,6 +39,7 @@ from dalal_street_lab.db import new_session
 from dalal_street_lab.features import FEATURE_VERSION, FEATURES, closed_sessions
 from dalal_street_lab.learners import Learner, Logistic, NeuralNet
 from dalal_street_lab.log import configure_logging
+from dalal_street_lab.metrics import BOT_EQUITY_KEY, BOT_LAST_EQUITY_KEY
 from dalal_street_lab.models import Candle, FeatureRow, Instrument, Order
 from dalal_street_lab.training import load_dataset
 
@@ -293,6 +295,15 @@ def sync_orders(session: Session, client: AlpacaClient) -> int:
     return len(open_orders)
 
 
+def report_equity(settings: Settings, equity: float, last_equity: float) -> None:
+    """Leave the account's numbers in Redis for the API's /metrics page (Step 13)."""
+    try:
+        client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        client.mset({BOT_EQUITY_KEY: equity, BOT_LAST_EQUITY_KEY: last_equity})
+    except redis.RedisError as error:
+        log.warning("equity_not_reported", error=str(error))  # monitoring must never block
+
+
 # ---------- The whole run ----------
 def run_bot(
     session: Session,
@@ -323,6 +334,7 @@ def run_bot(
     if client is None:
         raise BotStoppedError("Alpaca keys are needed to read the account.")
     equity, last_equity, positions = account_state(client)
+    report_equity(settings, equity, last_equity)
     plan = plan_orders(
         predictions=latest,
         positions=positions,

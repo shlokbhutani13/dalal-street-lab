@@ -148,3 +148,17 @@ async def test_live_trades_are_relayed_from_redis() -> None:
     await asyncio.wait_for(task, timeout=5)
 
     assert received == [trade]
+
+
+def test_metrics_page_reports_request_times_and_bot_equity(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    fake.mset({"bot:equity": 101_000, "bot:last_equity": 100_000})
+    monkeypatch.setattr("dalal_street_lab.metrics.redis.Redis.from_url", lambda *a, **k: fake)
+
+    client.get("/health")
+    page = client.get("/metrics").text
+
+    assert 'dalal_api_request_seconds_count{method="GET",route="/health",status="200"}' in page
+    assert "dalal_bot_daily_pnl_dollars 1000.0" in page

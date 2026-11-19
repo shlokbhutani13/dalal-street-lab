@@ -19,20 +19,32 @@ Redis with one line each, without changing any route code.
 
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from importlib.resources import files
 from typing import Annotated, Any
 
 import redis.asyncio as aioredis
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import HTMLResponse
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from dalal_street_lab.config import get_settings
 from dalal_street_lab.db import new_session
 from dalal_street_lab.features import FEATURE_VERSION
+from dalal_street_lab.metrics import API_LATENCY, BotAccountCollector
 from dalal_street_lab.models import (
     Article,
     ArticleSymbol,
@@ -45,6 +57,33 @@ from dalal_street_lab.models import (
 from dalal_street_lab.stream import LIVE_CHANNEL
 
 app = FastAPI(title="Dalal Street Lab", version="0.1.0")
+_bot_collector: list[BotAccountCollector] = []
+
+
+@app.middleware("http")
+async def time_requests(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Record how long every request took. The route template (/api/prices/{symbol}), not
+    the real path, is the label: one series per route instead of one per symbol."""
+    started = time.perf_counter()
+    response = await call_next(request)
+    route = request.scope.get("route")
+    path = getattr(route, "path", "unmatched")
+    API_LATENCY.labels(request.method, path, str(response.status_code)).observe(
+        time.perf_counter() - started
+    )
+    return response
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    """Prometheus reads this page. The bot's numbers are added the first time it's asked
+    for, so importing this module never needs settings or Redis."""
+    if not _bot_collector:
+        _bot_collector.append(BotAccountCollector(get_settings().redis_url))
+        REGISTRY.register(_bot_collector[0])
+    return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
 # ---------- Dependencies (swappable in tests) ----------

@@ -14,6 +14,7 @@ websocket is never blocked and no message is missed.
 import asyncio
 import contextlib
 import json
+import os
 import signal
 from collections.abc import Callable
 from datetime import datetime
@@ -23,6 +24,7 @@ from typing import Any
 import redis.asyncio as aioredis
 import structlog
 import websockets
+from prometheus_client import start_http_server
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from websockets.asyncio.client import ClientConnection
@@ -31,6 +33,7 @@ from dalal_street_lab.config import Settings, get_settings
 from dalal_street_lab.db import new_session
 from dalal_street_lab.history import parse_bars, save_candles
 from dalal_street_lab.log import configure_logging
+from dalal_street_lab.metrics import STREAM_CONNECTED, STREAM_RECONNECTS, STREAM_TRADES
 from dalal_street_lab.models import Instrument, Tick
 
 log = structlog.get_logger()
@@ -98,6 +101,8 @@ class LiveStream:
                 stop.set()  # let the flush loop save what we have, then stop
                 raise
             except (OSError, websockets.ConnectionClosed) as error:
+                STREAM_CONNECTED.set(0)
+                STREAM_RECONNECTS.inc()
                 log.warning("stream_disconnected", error=str(error), retry_in=self.backoff)
                 with contextlib.suppress(TimeoutError):  # wait, but wake early if stopped
                     await asyncio.wait_for(stop.wait(), timeout=self.backoff)
@@ -106,6 +111,7 @@ class LiveStream:
     async def _session(self, stop: asyncio.Event) -> None:
         async with websockets.connect(self.settings.alpaca_stream_url) as ws:
             await self._login_and_subscribe(ws)
+            STREAM_CONNECTED.set(1)
             self.backoff = 1.0  # connected fine: reset the waiting time
             while not stop.is_set():
                 try:
@@ -163,6 +169,7 @@ class LiveStream:
         if symbol not in self.symbols:
             return
         self.received += 1
+        STREAM_TRADES.labels(symbol=symbol).inc()
         time = datetime.fromisoformat(trade["t"])
 
         # 1. The live scoreboard: one Redis hash per symbol, always the latest trade.
@@ -236,6 +243,8 @@ async def run_stream() -> None:
 
 def main() -> None:
     configure_logging()
+    # Prometheus reads this process's numbers at http://<host>:9101/metrics
+    start_http_server(int(os.environ.get("DALAL_METRICS_PORT", "9101")))
     asyncio.run(run_stream())
 
 
