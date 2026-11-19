@@ -19,3 +19,6 @@ wheels/
 mlflow.db
 mlruns/
 mlartifacts/
+
+# Bot kill switch (create this file to stop all trading)
+KILL_SWITCH

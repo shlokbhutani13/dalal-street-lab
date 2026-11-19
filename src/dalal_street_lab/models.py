@@ -197,3 +197,33 @@ class Prediction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (CheckConstraint("prob_up BETWEEN 0 AND 1", name="prob_up_in_range"),)
+
+
+class Order(Base):
+    """Every order the paper-trading bot decided on, and what happened to it.
+
+    `client_order_id` is our own unique name for the order. Alpaca refuses a second order
+    with the same name, so re-running the bot by accident can never double up a trade.
+    """
+
+    __tablename__ = "orders"
+
+    client_order_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    alpaca_order_id: Mapped[str | None] = mapped_column(String(64))
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id"), index=True)
+    model_name: Mapped[str] = mapped_column(String(32))
+    signal_day: Mapped[date] = mapped_column(Date)  # the features' day the decision used
+    side: Mapped[str] = mapped_column(String(4))  # "buy" or "sell"
+    qty: Mapped[int] = mapped_column(BigInteger)
+    prob_up: Mapped[float | None] = mapped_column(Float)
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(24))  # planned, submitted, filled, canceled...
+    filled_qty: Mapped[int] = mapped_column(BigInteger, default=0)
+    filled_avg_price: Mapped[Decimal | None] = mapped_column(PRICE)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("side IN ('buy', 'sell')", name="side_is_buy_or_sell"),
+        CheckConstraint("qty > 0", name="qty_positive"),
+    )

@@ -39,14 +39,26 @@ class AlpacaClient:
             }
         )
 
-    def get(self, url: str, params: dict[str, Any] | None = None) -> Any:
+    def _pace(self) -> None:
         # Be polite: never send requests faster than the rate limit allows.
         wait = SECONDS_BETWEEN_REQUESTS - (time.monotonic() - self._last_request)
         if wait > 0:
             time.sleep(wait)
         self._last_request = time.monotonic()
 
+    def get(self, url: str, params: dict[str, Any] | None = None) -> Any:
+        self._pace()
         response = self.http.get(url, params=params, timeout=30)
+        if response.status_code in (401, 403):
+            raise AlpacaAuthError("Alpaca rejected the API keys. Check them in .env.")
+        response.raise_for_status()
+        return response.json()
+
+    def post(self, url: str, body: dict[str, Any]) -> Any:
+        """Send an order. POSTs are never retried automatically (urllib3 skips them), so a
+        network hiccup can't place the same order twice."""
+        self._pace()
+        response = self.http.post(url, json=body, timeout=30)
         if response.status_code in (401, 403):
             raise AlpacaAuthError("Alpaca rejected the API keys. Check them in .env.")
         response.raise_for_status()
