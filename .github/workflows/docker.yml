@@ -1,0 +1,50 @@
+name: Docker image
+
+# Builds the image, checks it starts and has the CPU-only torch, then publishes it to
+# GitHub's container registry: ghcr.io/shlokbhutani13/dalal-street-lab
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: dalal-street-lab:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test
+        run: |
+          docker run --rm dalal-street-lab:test python -c "
+          import torch, dalal_street_lab.api, dalal_street_lab.bot, dalal_street_lab.training
+          assert '+cpu' in torch.__version__, torch.__version__
+          print('torch', torch.__version__)"
+          docker run --rm dalal-street-lab:test alembic --help > /dev/null
+          docker image ls dalal-street-lab:test --format "Image size: {{.Size}}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Log in to GitHub's container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish
+        run: |
+          docker tag dalal-street-lab:test "$IMAGE:latest"
+          docker tag dalal-street-lab:test "$IMAGE:${GITHUB_SHA::7}"
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${GITHUB_SHA::7}"
