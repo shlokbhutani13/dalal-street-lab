@@ -42,6 +42,7 @@ dalal-train = "dalal_street_lab.training:main"
 dalal-backtest = "dalal_street_lab.backtest:main"
 dalal-bot = "dalal_street_lab.bot:main"
 dalal-api = "dalal_street_lab.api:main"
+dalal-drift = "dalal_street_lab.drift:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
