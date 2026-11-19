@@ -36,6 +36,7 @@ dalal-news = "dalal_street_lab.news:main"
 dalal-sentiment = "dalal_street_lab.sentiment:main"
 dalal-features = "dalal_street_lab.features:main"
 dalal-train = "dalal_street_lab.training:main"
+dalal-backtest = "dalal_street_lab.backtest:main"
 
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
